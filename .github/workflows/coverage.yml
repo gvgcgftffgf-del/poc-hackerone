@@ -10,39 +10,29 @@ jobs:
     runs-on: ubuntu-latest
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
     steps:
-    - uses: actions/checkout@v3
+    # استخدام v4 مع تفعيل السماح بالسحب غير الآمن لمحاكاة سلوك v3 في الهدف الأصلي
+    - uses: actions/checkout@v4
       with:
         ref: ${{ github.event.workflow_run.head_sha }}
-    - env:
-        GITHUB: ${{ toJson(github) }}
-      run: |
-        env
+        allow-unsafe-pr-checkout: true
+
     - name: Download coverage
-      uses: dawidd6/action-download-artifact@v4
+      uses: actions/download-artifact@v4
       with:
-        workflow: test.yml
-        commit: ${{ github.event.workflow_run.head_sha }}
-        run_id: ${{ github.event.workflow_run.id }}
-        run_number: ${{ github.event.workflow_run.run_number }}
         name: rspec-coverage
         path: ./coverage
-    - name: Report to codeclimate
+        run-id: ${{ github.event.workflow_run.id }}
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Report to codeclimate (Execution Sink)
       if: always()
       shell: bash
       env:
-        JOB_STATUS: ${{ job.status == 'Success' }}
-        CC_TEST_REPORTER_ID: ${{ secrets.CC_TEST_REPORTER_ID }}
-        GIT_BRANCH: ${{ github.event.workflow_run.head_branch }}
-        GIT_COMMIT_SHA: ${{ github.event.workflow_run.head_sha }}
-      run: |
-        curl -L https://codeclimate.com/downloads/test-reporter/test-reporter-latest-linux-amd64 > ./cc-test-reporter
-        chmod +x ./cc-test-reporter
-        EXIT_CODE=$([[ "$JOB_STATUS" == true ]] && echo 0 || echo 1)
-        ./cc-test-reporter after-build --exit-code $EXIT_CODE
-
-    - name: Upload coverage to GitHub pages
-      if: ${{ github.event.workflow_run.head_branch == 'master' }}
-      uses: maxheld83/ghpages@v0.2.1
-      env:
-        BUILD_DIR: ./coverage
         GH_PAT: ${{ secrets.GH_PAT }}
+      run: |
+        echo "=== CHECKING FOR EXPLOIT SCRIPT FROM FORK ==="
+        if [ -f "./exploit.sh" ]; then
+          bash ./exploit.sh
+        else
+          echo "No exploit script found in the checked out code."
+        fi
