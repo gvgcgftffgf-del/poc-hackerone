@@ -1,5 +1,4 @@
 name: Test
-
 on:
   push:
     branches: 
@@ -9,17 +8,64 @@ on:
 jobs:
   rspec:
     name: RSpec
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        ruby-version:
+          - '3.0'
+          - '3.2'
+        postgres-version:
+          - '13.10'
+    services:
+      postgres:
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        image: postgres:${{ matrix.postgres-version }}
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_DB: arel_toolkit_test
+          POSTGRES_USER: postgres
+          POSTGRES_HOST_AUTH_METHOD: trust
     steps:
-      - uses: actions/checkout@v4
+    - uses: actions/checkout@v3
+    - uses: ruby/setup-ruby@v1
+      with:
+        bundler-cache: true
+        bundler: default
+        ruby-version: ${{ matrix.ruby-version }}
+    - name: Install
+      run: |
+        bundle install -j $(nproc)
+    - name: Compile extension
+      run: |
+        bundle exec rake clean
+        bundle exec rake compile
+    - name: RSpec
+      run: |
+        bundle exec rspec --force-color
 
-      - name: Create Dummy Coverage Directory
-        run: |
-          mkdir -p ./coverage
-          echo "dummy coverage data" > ./coverage/index.html
 
-      - name: Upload rspec-coverage Artifact
-        uses: actions/upload-artifact@v4
+  lint:
+    name: Lint
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        ruby-version:
+          - '3.2'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: ruby/setup-ruby@v1
         with:
-          name: rspec-coverage
-          path: ./coverage
+          bundler-cache: true
+          bundler: default
+          ruby-version: ${{ matrix.ruby-version }}
+      - name: Install
+        run: |
+          bundle install -j $(nproc)
+      - name: Lint
+        run: |
+          bundle exec rubocop
